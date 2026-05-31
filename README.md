@@ -1,6 +1,6 @@
 # Pho Catcher
 
-An interactive arcade game celebrating the Hoi An Lantern Festival.
+<h2>An interactive arcade game celebrating the Hoi An Lantern Festival.</h2>
 <img width="691" height="731" alt="Screenshot 2026-05-31 at 4 52 46 PM" src="https://github.com/user-attachments/assets/2da8e4ca-508e-4d24-aa63-578e0f750c0b" />
 <img width="706" height="732" alt="Screenshot 2026-05-31 at 4 50 43 PM" src="https://github.com/user-attachments/assets/80c18a09-06b9-46d9-b5ee-b492b5983535" />
 
