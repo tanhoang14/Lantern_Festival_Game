@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pho Catcher - Hoi An Lantern Festival</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;700&family=Noto+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --gold: #f4a11d; --red: #e63946; --cyan: #48cae4;
+    --bg: #060612; --panel: #0e0e22; --panel2: #13132e;
+    --border: #2a2a5a; --text: #f0e6d3; --muted: #7a7aaa;
+    --green: #4ade80; --purple: #c084fc;
+  }
+  html, body { width:100%; height:100%; background:var(--bg); color:var(--text); font-family:'Noto Sans',sans-serif; overflow:hidden; }
+  #app { display:flex; flex-direction:column; align-items:center; justify-content:center; width:100vw; height:100vh; }
+  #hud {
+    width:100%; max-width:700px;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:8px 18px; background:var(--panel);
+    border:1px solid var(--border); border-bottom:none;
+    border-radius:14px 14px 0 0; flex-wrap:wrap; gap:4px; z-index:5;
+  }
+  .hud-chip { display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; }
+  .hud-score { color:var(--green); font-size:16px; font-weight:700; }
+  .hud-lives { color:var(--red); letter-spacing:2px; }
+  .hud-level { color:var(--gold); }
+  .hud-hi    { color:var(--purple); font-size:12px; }
+  #canvas-wrap {
+    position:relative; width:100%; max-width:700px;
+    flex:1; min-height:0; background:var(--bg);
+    border-left:1px solid var(--border); border-right:1px solid var(--border); overflow:hidden;
+  }
+  canvas { display:block; width:100%; height:100%; }
+  #overlay {
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    background:rgba(6,6,18,0.93); text-align:center;
+    padding:24px 20px; z-index:10; backdrop-filter:blur(4px);
+  }
+  #overlay h1 {
+    font-family:'Noto Serif',serif; font-size:clamp(18px,4vw,26px);
+    color:var(--gold); letter-spacing:0.04em; margin-bottom:4px;
+    text-shadow:0 0 24px rgba(244,161,29,0.5);
+  }
+  #overlay .sub { font-size:13px; color:var(--muted); margin-bottom:14px; }
+  .legend { display:grid; grid-template-columns:1fr 1fr; gap:8px 20px; margin:10px 0 14px; font-size:13px; text-align:left; }
+  .legend-row {
+    display:flex; align-items:center; gap:10px;
+    background:var(--panel2); border:1px solid var(--border);
+    border-radius:8px; padding:7px 10px;
+  }
+  .legend-icon { width:32px; height:32px; flex-shrink:0; }
+  .pts { font-weight:700; font-size:13px; margin-left:auto; }
+  .pts-good { color:var(--green); } .pts-bad { color:var(--red); } .pts-warn { color:var(--gold); }
+  .label { color:var(--muted); font-size:11px; }
+  .controls-row {
+    font-size:12px; color:var(--muted); background:var(--panel2);
+    border:1px solid var(--border); border-radius:8px;
+    padding:8px 16px; margin-bottom:14px; line-height:1.8;
+  }
+  kbd { background:var(--panel); border:1px solid var(--border); border-radius:4px; padding:1px 6px; font-size:11px; font-family:monospace; color:var(--cyan); }
+  #start-btn {
+    padding:12px 40px; background:linear-gradient(135deg,var(--gold),#e8860a);
+    color:#1a0800; border:none; border-radius:50px; font-size:16px;
+    font-weight:700; font-family:'Noto Serif',serif; cursor:pointer;
+    letter-spacing:0.04em; box-shadow:0 4px 24px rgba(244,161,29,0.35);
+    transition:transform 0.12s, box-shadow 0.12s;
+  }
+  #start-btn:hover { transform:translateY(-2px) scale(1.03); box-shadow:0 8px 32px rgba(244,161,29,0.5); }
+  #start-btn:active { transform:scale(0.97); }
+  #frozen-bar {
+    width:100%; max-width:700px; text-align:center; font-size:13px; font-weight:700;
+    color:#7dd3fc; background:#071a2e;
+    border-left:1px solid var(--border); border-right:1px solid var(--border);
+    height:0; overflow:hidden; transition:height 0.2s;
+  }
+  #frozen-bar.show { height:26px; line-height:26px; }
+  #fact-bar {
+    width:100%; max-width:700px; background:#071828; color:#7dd3fc;
+    font-size:12px; padding:6px 16px; border:1px solid var(--border);
+    border-top:none; border-radius:0 0 14px 14px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .go-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:14px 0; width:100%; max-width:320px; }
+  .go-card { background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:10px 14px; text-align:center; }
+  .go-card .go-label { font-size:11px; color:var(--muted); margin-bottom:4px; }
+  .go-card .go-val   { font-size:24px; font-weight:700; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hud">
+    <div class="hud-chip"><span>&#127942;</span><span class="hud-score" id="hud-score">0</span></div>
+    <div class="hud-chip hud-lives" id="hud-lives"></div>
+    <div class="hud-chip hud-level">Lv <span id="hud-level">1</span></div>
+    <div class="hud-chip hud-hi">Best: <span id="hud-hi">0</span></div>
+  </div>
+  <div id="canvas-wrap">
+    <canvas id="gc"></canvas>
+    <div id="overlay">
+      <h1>Pho Catcher — Hoi An Night</h1>
+      <p class="sub">Catch falling ingredients into your Pho bowl!</p>
+      <div class="legend">
+        <div class="legend-row">
+          <canvas class="legend-icon" id="li-gold"></canvas>
+          <div><div style="font-weight:600">Broth & Noodles</div><div class="label">Pho combo item</div></div>
+          <span class="pts pts-good">+10</span>
+        </div>
+        <div class="legend-row">
+          <canvas class="legend-icon" id="li-red"></canvas>
+          <div><div style="font-weight:600">Beef Slice</div><div class="label">Pho combo item</div></div>
+          <span class="pts pts-good">+5</span>
+        </div>
+        <div class="legend-row">
+          <canvas class="legend-icon" id="li-broken"></canvas>
+          <div><div style="font-weight:600">Rice Bowl</div><div class="label">Not for Pho! Avoid!</div></div>
+          <span class="pts pts-bad">-15</span>
+        </div>
+        <div class="legend-row">
+          <canvas class="legend-icon" id="li-crack"></canvas>
+          <div><div style="font-weight:600">Sushi</div><div class="label">Not for Pho! Avoid!</div></div>
+          <span class="pts pts-warn">FREEZE</span>
+        </div>
+      </div>
+      <div class="controls-row">
+        <kbd>&larr;</kbd><kbd>&rarr;</kbd> or <kbd>A</kbd><kbd>D</kbd> to move bowl &nbsp;&middot;&nbsp; Missing delicious combo ingredients costs a life<br>
+        Touch &amp; drag on mobile
+      </div>
+      <button id="start-btn">Start Festival!</button>
+    </div>
+  </div>
+  <div id="frozen-bar">FROZEN by sushi block! Bowl can't move!</div>
+  <div id="fact-bar">Welcome to the Hoi An Lantern Festival Pho Catcher!</div>
+</div>
+
+<script>
+// ── Canvas ──────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('gc');
+const ctx    = canvas.getContext('2d');
+const wrap   = document.getElementById('canvas-wrap');
+let W = 0, H = 0;
+
+function resize() {
+  const r = wrap.getBoundingClientRect();
+  W = r.width; H = r.height;
+  canvas.width  = W * devicePixelRatio;
+  canvas.height = H * devicePixelRatio;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+}
+resize();
+window.addEventListener('resize', () => { resize(); if (state) state.stars = makeStars(); });
+
+// ── Pure-canvas Lantern Shape ──────────────────────────────────────────────
+function drawLanternShape(c, cx, cy, size, colorTop, colorBot, now, phase) {
+  c.save();
+  const sway = Math.sin((now||0) * 1.2 + (phase||0)) * 2;
+  c.translate(cx + sway, cy);
+
+  c.strokeStyle = 'rgba(180,140,60,0.8)';
+  c.lineWidth = 1;
+  c.beginPath(); c.moveTo(0, -size - 4); c.lineTo(0, -size); c.stroke();
+
+  c.shadowColor = colorTop; c.shadowBlur = size * 0.8;
+
+  const w = size * 0.72, h = size;
+  c.beginPath();
+  c.moveTo(0, -h);
+  c.bezierCurveTo( w*1.1, -h*0.7,  w*1.1,  h*0.7,  0,  h);
+  c.bezierCurveTo(-w*1.1,  h*0.7, -w*1.1, -h*0.7,  0, -h);
+  const grad = c.createLinearGradient(-w, 0, w, 0);
+  grad.addColorStop(0,   colorBot);
+  grad.addColorStop(0.35, colorTop);
+  grad.addColorStop(0.65, colorTop);
+  grad.addColorStop(1,   colorBot);
+  c.fillStyle = grad;
+  c.fill();
+  c.shadowBlur = 0;
+
+  c.strokeStyle = 'rgba(0,0,0,0.25)'; c.lineWidth = 0.8;
+  for (let r = -1; r <= 1; r++) {
+    c.beginPath();
+    c.moveTo(r * w * 0.5, -h * 0.85);
+    c.lineTo(r * w * 0.5,  h * 0.85);
+    c.stroke();
+  }
+
+  c.fillStyle = 'rgba(0,0,0,0.35)';
+  c.beginPath(); c.ellipse(0, -h, w * 0.5, h * 0.12, 0, 0, Math.PI*2); c.fill();
+  c.beginPath(); c.ellipse(0,  h, w * 0.5, h * 0.12, 0, 0, Math.PI*2); c.fill();
+
+  c.strokeStyle = colorTop; c.lineWidth = 1; c.globalAlpha = 0.7;
+  for (let t = -2; t <= 2; t++) {
+    const tx = t * 3;
+    const wave = Math.sin((now||0)*3 + t) * 2;
+    c.beginPath();
+    c.moveTo(tx, h);
+    c.quadraticCurveTo(tx + wave, h + size*0.5, tx + wave*0.5, h + size*0.8);
+    c.stroke();
+  }
+  c.restore();
+}
+
+// ── Emoji Render Engine ─────────────────────────────────────────────────────
+function drawEmoji(c, text, x, y, size) {
+  c.save();
+  c.font = `${size}px serif`;
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.fillText(text, x, y);
+  c.restore();
+}
+
+function drawLegendIcons() {
+  const ids = ['li-gold','li-red','li-broken','li-crack'];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.width = 32; el.height = 32;
+    const lc = el.getContext('2d');
+    lc.clearRect(0,0,32,32);
+    if (id==='li-gold')   drawEmoji(lc, '🍲', 16, 16, 22);
+    if (id==='li-red')    drawEmoji(lc, '🥩', 16, 16, 22);
+    if (id==='li-broken') drawEmoji(lc, '🍚', 16, 16, 22);
+    if (id==='li-crack')  drawEmoji(lc, '🍣', 16, 16, 22);
+  });
+}
+drawLegendIcons();
+
+// ── Game Data ────────────────────────────────────────────────────────────────
+const TYPES = [
+  { kind:'GOLD',   pts:10,  w:40 },
+  { kind:'RED',    pts:5,   w:35 },
+  { kind:'BROKEN', pts:-15, w:15 },
+  { kind:'CRACK',  pts:0,   w:10 },
+];
+
+const FACTS = [
+  "Hoi An glows with thousands of lanterns every full moon night!",
+  "Den long (lanterns) symbolize good luck and prosperity in Vietnam!",
+  "The Lantern Festival falls on the 15th day of Lunar New Year!",
+  "Paper lanterns are released on the Thu Bon River to honor ancestors!",
+  "Red and gold are the luckiest colors in Vietnamese culture!",
+  "Tet Nguyen Tieu — the full-moon festival — lights up all of Hoi An!",
+  "Artisan families in Hoi An have hand-crafted silk lanterns for 400 years!",
+  "Pho bo (beef pho) is Vietnam's most beloved national dish!",
+];
+
+let state = null, running = false, highScore = 0;
+let keys = {}, lastTs = 0;
+let factIdx = 0, factTimer = 0, frozenShowing = false;
+
+const frozenBar = document.getElementById('frozen-bar');
+const factBar   = document.getElementById('fact-bar');
+const overlay   = document.getElementById('overlay');
+
+function weighted(types) {
+  const total = types.reduce((s,t) => s+t.w, 0);
+  let r = Math.random() * total;
+  for (const t of types) { r -= t.w; if (r<=0) return t; }
+  return types[0];
+}
+function makeStars() {
+  return Array.from({length:80}, () => ({
+    x: Math.random()*W, y: Math.random()*H*0.8,
+    r: Math.random()*1.4+0.3,
+    phase: Math.random()*Math.PI*2, speed:0.5+Math.random()
+  }));
+}
+
+// ── State ────────────────────────────────────────────────────────────────────
+function initState() {
+  return {
+    score:0, lives:3, level:1,
+    basketX: W/2 - 50, basketW:100,
+    lanterns:[], floats:[],
+    frozenUntil:0, spawnTimer:0,
+    stars:makeStars(), caught:0,
+    noodles: Array.from({length:6}, (_,i) => ({
+      ox: (i-2.5)*7, amp:3+i%3, freq:0.4+i*0.1
+    })),
+    meatballs: [{ ox:-18 },{ ox:8 }],
+    beefSlices: [{ ox:-6, angle:-0.3 },{ ox:14, angle:0.2 }],
+  };
+}
+
+function spawnLantern(s) {
+  const t = weighted(TYPES);
+  s.lanterns.push({
+    kind:t.kind, pts:t.pts,
+    x: Math.random()*(W-60)+30,
+    y: -30,
+    phase: Math.random()*Math.PI*2,
+  });
+}
+
+// ── Drawing Helpers ───────────────────────────────────────────────────────────
+function drawBg() {
+  const sky = ctx.createLinearGradient(0,0,0,H*0.78);
+  sky.addColorStop(0,'#03030f'); sky.addColorStop(1,'#08102a');
+  ctx.fillStyle = sky; ctx.fillRect(0,0,W,H*0.78);
+}
+
+function drawMoon() {
+  const mx=W-64, my=52;
+  ctx.save();
+  const glow=ctx.createRadialGradient(mx,my,10,mx,my,60);
+  glow.addColorStop(0,'rgba(255,240,180,0.2)');
+  glow.addColorStop(1,'rgba(255,240,180,0)');
+  ctx.fillStyle=glow; ctx.fillRect(mx-60,my-60,120,120);
+  ctx.fillStyle='#fef3c7';
+  ctx.beginPath(); ctx.arc(mx,my,26,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#08102a';
+  ctx.beginPath(); ctx.arc(mx+10,my-6,22,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function drawStars(stars, now) {
+  stars.forEach(s => {
+    const a = 0.2+0.6*(0.5+0.5*Math.sin(now*s.speed+s.phase));
+    ctx.save(); ctx.globalAlpha=a; ctx.fillStyle='#e8e0ff';
+    ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  });
+}
+
+function drawLanternString(now) {
+  ctx.save();
+  ctx.strokeStyle='rgba(180,140,80,0.35)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(0,18); ctx.lineTo(W,18); ctx.stroke();
+  const count=Math.floor(W/70);
+  for (let i=0; i<=count; i++) {
+    const x=i*(W/count);
+    const sag=8*Math.sin((i/count)*Math.PI);
+    ctx.beginPath(); ctx.moveTo(x,18); ctx.lineTo(x,18+sag+4); ctx.stroke();
+    drawLanternShape(ctx, x, 18+sag+26, 9,
+      i%2===0?'#f4a11d':'#e63946',
+      i%2===0?'#b87312':'#a01020',
+      now, i*0.8);
+  }
+  ctx.restore();
+}
+
+function drawRiver(basketY) {
+  const ry=basketY+32;
+  const grad=ctx.createLinearGradient(0,ry,0,H);
+  grad.addColorStop(0,'#0f2d4a'); grad.addColorStop(1,'#06111e');
+  ctx.fillStyle=grad; ctx.fillRect(0,ry,W,H-ry);
+  ctx.save();
+  ctx.strokeStyle='rgba(72,202,228,0.1)'; ctx.lineWidth=1.5;
+  for (let i=0;i<5;i++) {
+    const wy=ry+10+i*18;
+    ctx.beginPath(); ctx.moveTo(0,wy);
+    for (let x=0;x<=W;x+=28) ctx.quadraticCurveTo(x+14,wy-5,x+28,wy);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawPhoBowl(s, now) {
+  const cx = s.basketX + s.basketW/2;
+  const by = H - 52;
+  const bw = s.basketW;
+  const frozen = now < s.frozenUntil;
+
+  ctx.save();
+  ctx.shadowColor = frozen ? '#38bdf8' : '#c0392b';
+  ctx.shadowBlur  = frozen ? 22 : 16;
+
+  const outerW = bw/2 + 6;
+  ctx.fillStyle = frozen ? '#0369a1' : '#7b1010';
+  ctx.beginPath();
+  ctx.moveTo(cx - outerW, by);
+  ctx.quadraticCurveTo(cx - outerW*1.08, by+28, cx, by+34);
+  ctx.quadraticCurveTo(cx + outerW*1.08, by+28, cx + outerW, by);
+  ctx.ellipse(cx, by, outerW, 9, 0, 0, Math.PI, true);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  const innerW = bw/2;
+  ctx.fillStyle = frozen ? '#0ea5e9' : '#a01818';
+  ctx.beginPath();
+  ctx.moveTo(cx - innerW, by);
+  ctx.quadraticCurveTo(cx - innerW*1.05, by+25, cx, by+30);
+  ctx.quadraticCurveTo(cx + innerW*1.05, by+25, cx + innerW, by);
+  ctx.ellipse(cx, by, innerW, 7, 0, 0, Math.PI, true);
+  ctx.fill();
+
+  ctx.fillStyle = frozen ? '#bae6fd' : '#c0392b';
+  ctx.beginPath(); ctx.ellipse(cx, by, innerW, 7, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = frozen ? 'rgba(125,211,252,0.4)' : 'rgba(80,0,0,0.45)';
+  ctx.beginPath(); ctx.ellipse(cx, by+1, innerW*0.75, 5, 0, 0, Math.PI*2); ctx.fill();
+
+  if (!frozen) {
+    ctx.strokeStyle = '#f5f0e0'; ctx.lineWidth = 1.8; ctx.lineCap = 'round';
+    s.noodles.forEach(n => {
+      const nx = cx + n.ox;
+      ctx.beginPath();
+      ctx.moveTo(nx - 10, by - 3);
+      for (let t=0; t<=1; t+=0.1) {
+        const lx = nx - 10 + t*20;
+        const ly = by - 3 + Math.sin(t*Math.PI*2*n.freq + now*1.5)*n.amp;
+        ctx.lineTo(lx, ly);
+      }
+      ctx.stroke();
+    });
+
+    s.beefSlices.forEach(b => {
+      ctx.save();
+      ctx.translate(cx + b.ox, by - 1);
+      ctx.rotate(b.angle);
+      ctx.fillStyle = '#8B3A1A';
+      ctx.beginPath(); ctx.ellipse(0, 0, 9, 4, 0, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = 'rgba(220,160,120,0.5)'; ctx.lineWidth=0.8;
+      ctx.beginPath(); ctx.moveTo(-5,0); ctx.lineTo(5,0); ctx.stroke();
+      ctx.restore();
+    });
+
+    s.meatballs.forEach(mb => {
+      const mx2 = cx + mb.ox, my2 = by - 2;
+      ctx.save();
+      ctx.shadowColor='rgba(0,0,0,0.4)'; ctx.shadowBlur=3;
+      const mg = ctx.createRadialGradient(mx2-2, my2-2, 1, mx2, my2, 6);
+      mg.addColorStop(0,'#c0784a'); mg.addColorStop(1,'#7a3015');
+      ctx.fillStyle=mg;
+      ctx.beginPath(); ctx.arc(mx2, my2, 6, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    });
+
+    ctx.strokeStyle='rgba(255,210,190,0.4)'; ctx.lineWidth=1.5; ctx.lineCap='round';
+    for (let i=0;i<3;i++) {
+      const sx=cx+(i-1)*16;
+      const wave=Math.sin(now*2+i*2.1)*3;
+      ctx.beginPath();
+      ctx.moveTo(sx, by-8);
+      ctx.bezierCurveTo(sx+wave, by-16, sx-wave, by-22, sx+wave*0.5, by-30);
+      ctx.stroke();
+    }
+  } else {
+    ctx.fillStyle='rgba(200,240,255,0.7)'; ctx.strokeStyle='rgba(255,255,255,0.6)'; ctx.lineWidth=0.8;
+    [[cx-14,by-1,4],[cx,by-2,5],[cx+12,by-1,3]].forEach(([ix,iy,ir]) => {
+      ctx.beginPath(); ctx.arc(ix,iy,ir,0,Math.PI*2); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(ix-ir*1.4,iy); ctx.lineTo(ix+ir*1.4,iy);
+      ctx.moveTo(ix,iy-ir*1.4); ctx.lineTo(ix,iy+ir*1.4);
+      ctx.stroke();
+    });
+    ctx.font='bold 10px Noto Sans'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillStyle='#e0f2fe'; ctx.fillText('FROZEN', cx, by+22);
+  }
+
+  ctx.strokeStyle = frozen ? 'rgba(186,230,253,0.6)' : 'rgba(220,80,60,0.5)';
+  ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.ellipse(cx, by, outerW, 9, 0, -Math.PI, 0, true); ctx.stroke();
+
+  ctx.strokeStyle = frozen ? '#7dd3fc' : '#6B3A10';
+  ctx.lineWidth=2.2; ctx.lineCap='round'; ctx.shadowBlur=0;
+  ctx.beginPath();
+  ctx.moveTo(cx-outerW-4, by-7);
+  ctx.lineTo(cx+outerW*0.4, by+3);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx-outerW*0.4, by+3);
+  ctx.lineTo(cx+outerW+4, by-7);
+  ctx.stroke();
+
+  ctx.restore();
+  return { x: s.basketX, y: by, w: bw };
+}
+
+function drawFallingItem(l, now) {
+  const emojiSize = 28;
+  if (l.kind === 'GOLD')   drawEmoji(ctx, '🍲', l.x, l.y, emojiSize);
+  if (l.kind === 'RED')    drawEmoji(ctx, '🥩', l.x, l.y, emojiSize);
+  if (l.kind === 'BROKEN') drawEmoji(ctx, '🍚', l.x, l.y, emojiSize);
+  if (l.kind === 'CRACK')  drawEmoji(ctx, '🍣', l.x, l.y, emojiSize);
+}
+
+function drawFloats(floats, now) {
+  floats.forEach(f => {
+    const age=now-f.born; if (age>1.2) return;
+    ctx.save();
+    ctx.globalAlpha=Math.max(0,1-age/1.2);
+    ctx.font='bold 14px Noto Sans'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillStyle=f.color; ctx.shadowColor=f.color; ctx.shadowBlur=8;
+    ctx.fillText(f.text, f.x, f.y-age*50);
+    ctx.restore();
+  });
+}
+
+function updateHUD(s) {
+  document.getElementById('hud-score').textContent = s.score;
+  const alive = '&#9829; '.repeat(s.lives);
+  const dead  = '&#9825; '.repeat(Math.max(0,3-s.lives));
+  document.getElementById('hud-lives').innerHTML = alive+dead;
+  document.getElementById('hud-level').textContent = s.level;
+  document.getElementById('hud-hi').textContent    = highScore;
+}
+
+// ── Main Loop ────────────────────────────────────────────────────────────────
+function loop(ts) {
+  if (!running) return;
+  const dt  = Math.min((ts-lastTs)/1000, 0.05);
+  lastTs = ts;
+  const now = ts/1000;
+  const s   = state;
+
+  s.level = 1+Math.floor(s.score/60);
+  const speed     = 55+s.level*12;
+  const spawnRate = Math.max(0.55, 1.5-s.level*0.08);
+
+  // Input processing
+  const frozen = now < s.frozenUntil;
+  if (!frozen) {
+    const mv=260;
+    if (keys['ArrowLeft'] ||keys['a']||keys['A']) s.basketX=Math.max(0,s.basketX-mv*dt);
+    if (keys['ArrowRight']||keys['d']||keys['D']) s.basketX=Math.min(W-s.basketW,s.basketX+mv*dt);
+  }
+
+  if (frozen!==frozenShowing) {
+    frozenShowing=frozen;
+    frozenBar.classList.toggle('show',frozen);
+  }
+
+  // Spawning logic
+  s.spawnTimer+=dt;
+  if (s.spawnTimer>=spawnRate && s.lanterns.length<8) { spawnLantern(s); s.spawnTimer=0; }
+
+  // Movement & Collision detection (realigned for taller emojis)
+  const basketY=H-52;
+  const hit=[],miss=[],keep=[];
+  s.lanterns.forEach(l => {
+    l.y+=speed*dt;
+    // Lowered edge threshold check to match visual emoji height intersection
+    if (l.y >= basketY - 16 && l.y <= basketY + 12) {
+      const cx2=s.basketX, cw=s.basketW;
+      if (l.x>=cx2-18 && l.x<=cx2+cw+18) hit.push(l); else keep.push(l);
+    } else if (l.y > basketY + 12) {
+      miss.push(l);
+    } else keep.push(l);
+  });
+  s.lanterns=keep;
+
+  hit.forEach(l => {
+    if (l.kind==='CRACK') {
+      s.frozenUntil=now+2.2;
+      s.floats.push({x:l.x,y:basketY-10,text:'SUSHI FREEZE!',color:'#7dd3fc',born:now});
+    } else if (l.kind==='BROKEN') {
+      s.score=Math.max(0,s.score+l.pts);
+      s.floats.push({x:l.x,y:basketY-10,text:'-15 RICE BOWL!',color:'#f87171',born:now});
+    } else {
+      s.score+=l.pts; s.caught++;
+      s.floats.push({x:l.x,y:basketY-10,text:`+${l.pts}`,color:'#4ade80',born:now});
+    }
+  });
+  miss.forEach(l => {
+    if (l.kind==='GOLD'||l.kind==='RED') {
+      s.lives--;
+      s.floats.push({x:l.x,y:basketY+10,text:'MISSED!',color:'#f87171',born:now});
+    }
+  });
+
+  if (s.score>highScore) highScore=s.score;
+  s.floats=s.floats.filter(f=>now-f.born<1.2);
+
+  if (now-factTimer>8) {
+    factIdx=(factIdx+1)%FACTS.length;
+    factTimer=now;
+    factBar.textContent=FACTS[factIdx];
+  }
+
+  // Canvas refresh and layer painting
+  ctx.clearRect(0,0,W,H);
+  drawBg();
+  drawStars(s.stars,now);
+  drawMoon();
+  drawLanternString(now);
+  s.lanterns.forEach(l=>drawFallingItem(l,now));
+  const bowl=drawPhoBowl(s,now);
+  drawRiver(bowl.y);
+  drawFloats(s.floats,now);
+  updateHUD(s);
+
+  if (s.lives<=0) { running=false; showGameOver(s); return; }
+  requestAnimationFrame(loop);
+}
+
+// ── Screens ──────────────────────────────────────────────────────────────────
+function showGameOver(s) {
+  const rec=s.score>=highScore&&s.score>0;
+  overlay.innerHTML=`
+    <h1 style="color:${rec?'#f4a11d':'#e63946'}">${rec?'New Record!':'Game Over'}</h1>
+    <p class="sub">The ancestors watched over you tonight.</p>
+    <div class="go-grid">
+      <div class="go-card"><div class="go-label">Score</div><div class="go-val" style="color:#4ade80">${s.score}</div></div>
+      <div class="go-card"><div class="go-label">Best</div><div class="go-val" style="color:#a78bfa">${highScore}</div></div>
+      <div class="go-card"><div class="go-label">Level</div><div class="go-val" style="color:#f4a11d">${s.level}</div></div>
+      <div class="go-card"><div class="go-label">Caught</div><div class="go-val" style="color:#7dd3fc">${s.caught}</div></div>
+    </div>
+    <button id="start-btn">Play Again</button>
+  `;
+  overlay.style.display='flex';
+  document.getElementById('start-btn').addEventListener('click',startGame);
+}
+
+function startGame() {
+  resize();
+  overlay.style.display='none';
+  frozenBar.classList.remove('show');
+  frozenShowing=false;
+  state=initState();
+  factTimer=performance.now()/1000;
+  running=true; lastTs=performance.now();
+  requestAnimationFrame(loop);
+}
+document.getElementById('start-btn').addEventListener('click',startGame);
+
+// ── Input Handling ───────────────────────────────────────────────────────────
+document.addEventListener('keydown',e=>{
+  keys[e.key]=true;
+  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
+});
+document.addEventListener('keyup',e=>{ keys[e.key]=false; });
+
+let touchPrevX=null;
+wrap.addEventListener('touchstart',e=>{ touchPrevX=e.touches[0].clientX; },{passive:true});
+wrap.addEventListener('touchmove',e=>{
+  if(!running||touchPrevX===null) return;
+  const dx=e.touches[0].clientX-touchPrevX;
+  touchPrevX=e.touches[0].clientX;
+  if(state&&performance.now()/1000<state.frozenUntil) return;
+  if(state) state.basketX=Math.max(0,Math.min(W-state.basketW,state.basketX+dx));
+},{passive:true});
+wrap.addEventListener('touchend',()=>{ touchPrevX=null; });
+</script>
+</body>
+</html>
